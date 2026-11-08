@@ -1,0 +1,3 @@
+Mouse CMenu is a lightweight Windows system-tray launcher that turns any mouse button or scroll direction into a global shortcut for a custom application menu. Build nested submenus, launch .exe/.com/.lnk apps, show icons, run at startup, and switch between English and Polish.
+
+Mouse CMenu by Sebastian Janychowski ⌁ polsoft.ITS™
