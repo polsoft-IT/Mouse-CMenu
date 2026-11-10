@@ -2,9 +2,19 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QObject, QPoint, Qt, Slot
-from PySide6.QtGui import QCursor, QIcon
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+from PySide6.QtCore import QObject, QPoint, QRectF, Qt, Slot
+from PySide6.QtGui import (QColor, QCursor, QIcon, QPainter, QPainterPath, QPixmap)
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app_icon import app_icon
 from context_menu import ContextMenu
@@ -69,24 +79,9 @@ class TrayApplication(QObject):
 
     def show_about(self) -> None:
         polish = self.settings.language == "pl"
-        title = "O programie Mouse CMenu" if polish else "About Mouse CMenu"
-        description = (
-            "Lekka aplikacja w zasobniku do uruchamiania własnego menu aplikacji skrótem myszy."
-            if polish
-            else "A lightweight tray app for opening a custom app menu with a mouse shortcut."
-        )
-        details = (
-            "Autor: Sebastian Januchowski\n"
-            "Firma: polsoft.ITS™\n"
-            "E-mail: polsoft.its@mail.com\n"
-            "GitHub: https://github.com/polsoft-it"
-            if polish
-            else "Author: Sebastian Januchowski\n"
-            "Company: polsoft.ITS™\n"
-            "Email: polsoft.its@mail.com\n"
-            "GitHub: https://github.com/polsoft-it"
-        )
-        QMessageBox.about(None, title, f"{description}\n\n{details}")
+        polish = self.settings.language == "pl"
+        dialog = _AboutDialog(polish, self)
+        dialog.exec()
 
     @Slot(int, int, bool)
     def _on_mouse_pressed(self, x: int, y: int, triggered: bool) -> None:
@@ -115,6 +110,105 @@ class TrayApplication(QObject):
 
     def shutdown(self) -> None:
         self.mouse_service.stop()
+
+
+APP_VERSION = "1.2.0"
+
+
+class _IconBadge(QWidget):
+    """Rounded card behind the app icon drawn with a subtle gradient."""
+
+    def __init__(self, icon: QIcon, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._icon = icon
+        self.setFixedSize(84, 84)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(1.0, 1.0, self.width() - 2.0, self.height() - 2.0)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 22.0, 22.0)
+        painter.fillPath(path, QColor("#2D4B7C"))
+        size = round(min(rect.width(), rect.height()) * 0.66)
+        pixmap = self._icon.pixmap(size, size)
+        x = (self.width() - pixmap.width()) / 2.0
+        y = (self.height() - pixmap.height()) / 2.0
+        painter.drawPixmap(round(x), round(y), pixmap)
+        painter.end()
+
+
+class _AboutDialog(QDialog):
+    def __init__(self, polish: bool, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(("O programie Mouse CMenu" if polish else "About Mouse CMenu"))
+        self.setWindowIcon(app_icon())
+        self.setModal(True)
+        self.setFixedWidth(420)
+
+        version_label = QLabel("<b style='font-size:20pt'>Mouse CMenu</b>")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        version_text = QLabel(f"Wersja {APP_VERSION}" if polish else f"Version {APP_VERSION}")
+        version_text.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        version_text.setStyleSheet("color: palette(mid);")
+
+        description = QLabel(
+            "Lekka aplikacja w zasobniku do uruchamiania własnego menu aplikacji skrótem myszy."
+            if polish
+            else "A lightweight tray app for opening a custom app menu with a mouse shortcut."
+        )
+        description.setWordWrap(True)
+        description.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        rows = (
+            (("Autor", "Author"), "Sebastian Januchowski"),
+            (("Firma", "Company"), "polsoft.ITS™"),
+            (("E-mail", "Email"), "polsoft.its@mail.com"),
+            (("GitHub", "GitHub"), "https://github.com/polsoft-it"),
+        )
+
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(6)
+        for (label_pl, label_en), value in rows:
+            row = QHBoxLayout()
+            name = QLabel(f"{label_pl if polish else label_en}:")
+            name.setStyleSheet("font-weight: bold;")
+            link = QLabel(value)
+            if label_pl in ("E-mail", "GitHub"):
+                if label_pl == "E-mail":
+                    link.setText(f"<a href='mailto:{value}'>{value}</a>")
+                else:
+                    link.setText(f"<a href='{value}'>{value}</a>")
+                link.setOpenExternalLinks(True)
+            row.addWidget(name)
+            row.addWidget(link, 1)
+            info_layout.addLayout(row)
+
+        close_button = QPushButton("Zamknij" if polish else "Close")
+        close_button.setDefault(True)
+        close_button.clicked.connect(self.accept)
+        button_row = QHBoxLayout()
+        button_row.addStretch(1)
+        button_row.addWidget(close_button)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 20)
+        layout.setSpacing(14)
+        header = QHBoxLayout()
+        header.addStretch(1)
+        header.addWidget(_IconBadge(app_icon()))
+        header.addStretch(1)
+        layout.addLayout(header)
+        layout.addWidget(version_label)
+        layout.addWidget(version_text)
+        layout.addWidget(description)
+        separator = QLabel()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background: palette(mid); border: none;")
+        layout.addWidget(separator)
+        layout.addLayout(info_layout)
+        layout.addSpacing(8)
+        layout.addLayout(button_row)
 
 
 def main() -> int:
